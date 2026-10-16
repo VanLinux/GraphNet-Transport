@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "graphnet-transport"
+version = "1.0.0"
+description = "Scientific desktop application for graphs, transportation networks and Markov chains"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "GPL-3.0-only"
+authors = [{name = "Héctor Alonso Benítez García"}]
+dependencies = ["numpy>=1.24", "scipy>=1.10", "networkx>=3.0", "PySide6>=6.5"]
+
+[project.optional-dependencies]
+dev = ["pytest>=7", "pytest-cov>=4"]
+
+[project.scripts]
+graphnet = "graphnet_transport.gui:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
