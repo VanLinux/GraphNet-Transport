@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<graphml xmlns="http://graphml.graphdrawing.org/xmlns">
+  <key id="weight" for="edge" attr.name="weight" attr.type="double"/>
+  <key id="mode" for="edge" attr.name="mode" attr.type="string"/>
+  <key id="transfer" for="edge" attr.name="transfer" attr.type="boolean"/>
+  <graph edgedefault="directed">
+    <node id="A"/><node id="B"/><node id="C"/>
+    <edge source="A" target="B"><data key="weight">2</data><data key="mode">metro</data><data key="transfer">false</data></edge>
+    <edge source="B" target="C"><data key="weight">2</data><data key="mode">autobus</data><data key="transfer">true</data></edge>
+    <edge source="A" target="C"><data key="weight">7</data><data key="mode">metro</data><data key="transfer">false</data></edge>
+  </graph>
+</graphml>

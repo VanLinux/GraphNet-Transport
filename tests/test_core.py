@@ -109,3 +109,12 @@ def test_intermodal():
     G.add_edge("A","C",weight=7,mode="metro")
     assert c.intermodal_shortest_path(G,"A","C",1)["costo_generalizado"]==5
     assert c.intermodal_shortest_path(G,"A","C",5)["costo_generalizado"]==7
+
+
+def test_undirected_flow_and_examples():
+    G=c.matrix_to_graph([[0,3,1],[3,0,2],[1,2,0]],False)
+    assert c.maximum_flow(G,'1','3')['flujo_maximo']==3
+    example_file=__import__('pathlib').Path(__file__).parents[1]/'examples'/'red_intermodal.graphml'
+    other=c.load_graphml(example_file)
+    assert c.multimodal_summary(other)['enlaces_transbordo']==[('B','C')]
+    assert c.intermodal_shortest_path(other,'A','C',1)['costo_generalizado']==5

@@ -176,10 +176,12 @@ def maximum_flow(G, source, sink):
         capacity = float(d.get("capacity", d.get("weight", 1)))
         if capacity < 0 or not math.isfinite(capacity):
             raise ValueError("Las capacidades deben ser finitas y no negativas.")
-        if H.has_edge(u, v):
-            H[u][v]["capacity"] += capacity
-        else:
-            H.add_edge(u, v, capacity=capacity)
+        arcs = [(u, v)] if G.is_directed() or u == v else [(u, v), (v, u)]
+        for start, end in arcs:
+            if H.has_edge(start, end):
+                H[start][end]["capacity"] += capacity
+            else:
+                H.add_edge(start, end, capacity=capacity)
     value, flow = nx.maximum_flow(H, source, sink, capacity="capacity")
     cut, partition = nx.minimum_cut(H, source, sink, capacity="capacity")
     return {"flujo_maximo": value, "flujo_por_arco": flow,
@@ -217,7 +219,8 @@ def multimodal_summary(G):
     for u, v, d in G.edges(data=True):
         mode = str(d.get("mode", "sin_especificar"))
         modes[mode] = modes.get(mode, 0) + 1
-        if bool(d.get("transfer", False)) or mode.lower() in ("transfer", "transbordo"):
+        explicit = str(d.get("transfer", "false")).strip().lower() in ("1", "true", "yes", "sí")
+        if explicit or mode.lower() in ("transfer", "transbordo"):
             transfers.append((str(u), str(v)))
     return {"arcos_por_modo": modes, "enlaces_transbordo": transfers,
             "nota": "La accesibilidad depende de tiempo, espera y penalización de transbordo."}
@@ -358,8 +361,6 @@ def intermodal_shortest_path(G, source, target, transfer_penalty=0.0):
             break
         for _,v,attributes in G.edges(u,data=True):
             # For Graphs / DiGraphs, edges(u) are incident/outgoing respectively.
-            if not G.is_directed() and u not in (v,):
-                pass
             mode=str(attributes.get('mode','sin_especificar'))
             weight=float(attributes.get('weight',1))
             if not math.isfinite(weight) or weight<0:

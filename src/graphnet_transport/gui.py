@@ -7,11 +7,12 @@ from pathlib import Path
 
 import numpy as np
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QFormLayout,
     QTableWidget, QTableWidgetItem, QSplitter, QGroupBox, QLabel, QLineEdit,
     QSpinBox, QCheckBox, QPushButton, QComboBox, QPlainTextEdit, QFileDialog,
-    QMessageBox, QHeaderView, QAbstractItemView
+    QMessageBox, QHeaderView
 )
 
 from . import __version__, __author__
@@ -91,6 +92,7 @@ class MainWindow(QMainWindow):
         form.addRow("Operación",self.task)
         self.directed=QCheckBox("Red dirigida"); self.directed.setChecked(True)
         form.addRow(self.directed)
+        self.directed.toggled.connect(self._on_edit)
         self.source=QLineEdit("1"); self.target=QLineEdit("4")
         self.source.setPlaceholderText("Nodo inicial / fuente")
         self.target.setPlaceholderText("Nodo final / sumidero")
@@ -126,12 +128,14 @@ class MainWindow(QMainWindow):
         controls.addStretch()
         splitter.addWidget(side)
         workspace=QWidget(); workspace_layout=QVBoxLayout(workspace)
-        workspace_layout.addWidget(QLabel("Matriz de entrada (doble clic para editar; Ctrl+V para pegado manual no integrado)"))
+        workspace_layout.addWidget(QLabel("Matriz de entrada · doble clic para editar · Ctrl+V para pegar desde una hoja de cálculo"))
         self.table=QTableWidget(4,4)
         self.table.setAlternatingRowColors(True)
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.table.verticalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.table.itemChanged.connect(self._on_edit)
+        self.paste_shortcut = QShortcut(QKeySequence.Paste, self.table)
+        self.paste_shortcut.activated.connect(self.paste_matrix)
         workspace_layout.addWidget(self.table,3)
         results_title=QHBoxLayout()
         results_title.addWidget(QLabel("Resultados")); results_title.addStretch()
@@ -149,6 +153,24 @@ class MainWindow(QMainWindow):
     def _on_edit(self):
         if not self._building:
             self._dirty=True
+            self._result=None
+            if hasattr(self, "output"):
+                self.output.setPlainText("La matriz cambió. Ejecute nuevamente el cálculo para actualizar resultados.")
+
+    def paste_matrix(self):
+        """Paste spreadsheet-like tabular data at the selected cell."""
+        text=QApplication.clipboard().text().strip("\r\n")
+        if not text:
+            return
+        selection=self.table.selectedRanges()
+        start_i=selection[0].topRow() if selection else self.table.currentRow()
+        start_j=selection[0].leftColumn() if selection else self.table.currentColumn()
+        start_i=max(start_i,0); start_j=max(start_j,0)
+        for di,line in enumerate(text.replace("\r", "").split("\n")):
+            delimiter="\t" if "\t" in line else ";" if ";" in line else ","
+            for dj,value in enumerate(line.split(delimiter)):
+                if start_i+di < self.table.rowCount() and start_j+dj < self.table.columnCount():
+                    self.table.setItem(start_i+di,start_j+dj,QTableWidgetItem(value.strip()))
 
     def _update_task(self):
         task=TASKS[self.task.currentText()]
@@ -176,6 +198,7 @@ class MainWindow(QMainWindow):
             self.source.setText(labels[0]); self.target.setText(labels[-1])
             if not preserve_graph: self._graph=None
             self._dirty=not preserve_graph
+            self._result=None
         finally:
             self._building=False
 

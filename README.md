@@ -25,7 +25,7 @@ Alternativamente: `python -m graphnet_transport`. Para realizar pruebas: `python
 
 ## Funcionalidades de v1.0.0
 
-- Editor matricial, apertura y guardado de matrices numéricas CSV y redes GraphML.
+- Editor matricial con pegado de hojas de cálculo (Ctrl+V), apertura y guardado de matrices numéricas CSV y redes GraphML.
 - Grados, conectividad débil/fuerte, densidad, centralidades, puntos de articulación, puentes, matrices de adyacencia, grados, Laplaciana y alcanzabilidad.
 - Conectividad algebraica para redes no dirigidas.
 - Dijkstra, Bellman-Ford, Floyd-Warshall, Prim, Kruskal; flujo máximo y corte mínimo.
@@ -33,6 +33,12 @@ Alternativamente: `python -m graphnet_transport`. Para realizar pruebas: `python
 - Resumen de arcos por modo y enlaces de transbordo etiquetados en GraphML; ruta intermodal óptima con penalización constante de cambio de modo.
 - Cadenas de Markov: validación, espectro propio, evolución P^n, distribuciones estacionarias de clases cerradas, irreducibilidad, aperiodicidad y análisis de absorción.
 - Exportación JSON de resultados. Créditos visibles en barra de estado y ventana «Acerca de».
+
+## Ejemplos incluidos
+
+- `examples/red_rutas.csv`: red dirigida de cuatro nodos. Calcule Dijkstra de 1 a 4 (costo esperado: 5).
+- `examples/markov.csv`: cadena de Markov de tres estados para examinar el espectro y la evolución temporal.
+- `examples/red_intermodal.graphml`: red con etiquetas de modo y transbordo. Calcule la ruta de A a C con penalización 1 (costo esperado: 5).
 
 ## Cómo ingresar una matriz
 
