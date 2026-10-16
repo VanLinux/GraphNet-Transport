@@ -1,4 +1,4 @@
-# GraphNet Transport — versión 3.0.0
+# GraphNet Transport — versión 3.1.0
 
 **Graph Theory & Network Optimization** · Software libre · GNU GPL v3.0
 
@@ -34,6 +34,17 @@ graphnet
 
 También puede iniciarse mediante `python -m graphnet_transport`.
 
+## Novedades de la versión 3.1.0
+
+- **Resultados de conectividad compactos**: densidad expresada en porcentaje, conexiones existentes y máximas, componentes conexas y tabla por vértice, con un comentario de interpretación. Los indicadores avanzados siguen accesibles en el JSON exportable; se evita repetir listas verticales en pantalla.
+- **Convención de matrices diferenciada**: en teoría de grafos, una casilla seleccionable interpreta `0` fuera de diagonal como **ausencia de conexión** (matriz de adyacencia binaria). En caminos mínimos y matrices de costos, un cero fuera de diagonal continúa representando un arco de costo cero. Una red no dirigida debe representarse con una **matriz simétrica**; se informa el error si falta el arco recíproco.
+- **Conteo de caminos de longitud exacta** dentro de **Estructura y matrices**: seleccionar origen, destino, longitud `k` y modalidad **Recorridos (se pueden repetir nodos o aristas)** o **Caminos simples (no se repiten nodos)**. La primera modalidad calcula exactamente la entrada `(A^k)[origen,destino]` usando multiplicación iterativa de enteros sin límite de 64 bits. La segunda utiliza programación dinámica sobre conjuntos visitados y admite hasta 16 nodos; si no puede determinar el resultado, muestra una limitación expresa.
+- **Informes científicos LaTeX mejorados**: tablas compactas `booktabs`, fórmula de densidad apropiada al tipo de grafo y sustitución numérica, cálculo explicado, interpretación, matriz original y diagrama TikZ donde procede. Papel carta, crédito del desarrollador en pie de página y muestra de recorrido resaltada en verde. La exportación sigue requiriendo solo un nombre.
+
+**Ejercicio de cuatro estaciones:** `examples/red_conectividad.csv` representa A–B, A–C, B–C y C–D. En el programa, abra el CSV, seleccione **Estructura y matrices → Grados, conectividad y centralidad**, desmarque *Red dirigida* y mantenga marcada la opción *0 = sin conexión (adyacencia)*. Deberá obtener **4 nodos, 4 aristas, 6 posibles, 66.67 %**. Los nodos 1, 2, 3 y 4 corresponden respectivamente a A, B, C y D.
+
+Para contar recorridos, escoja **Conteo de caminos de longitud k**, el origen `1`, el destino `4` y `k=2`: el total esperado es **1** (`1 → 3 → 4`). Con `k=3` y caminos simples, el total esperado es **1** (`1 → 2 → 3 → 4`). Un recorrido puede repetir nodos; un camino simple no. El parámetro longitud contabiliza **aristas**, no nodos.
+
 ## Novedades de la versión 3.0.0
 
 Se añadió un grupo de **recorridos de grafos** con análisis euleriano y hamiltoniano, para redes dirigidas y no dirigidas. El algoritmo euleriano distingue entre circuitos y caminos abiertos, y entrega una secuencia de nodos cuando existe. El algoritmo hamiltoniano emplea una **búsqueda exacta hasta 16 nodos**; en grafos de mayor tamaño indica **«No determinado»**, sin atribuir erróneamente la ausencia de ciclos.
@@ -48,7 +59,7 @@ La interfaz ahora tiene **dos selectores jerárquicos**: primero el **tipo de c�
 
 **Categorías disponibles:**
 
-1. **Estructura y matrices**: grados, densidad, conectividad, matrices de adyacencia/Laplaciana y conectividad algebraica.
+1. **Estructura y matrices**: grados, densidad, conectividad, **conteo de caminos de longitud exacta**, matrices de adyacencia/Laplaciana y conectividad algebraica.
 2. **Recorridos de grafos**: circuito/camino euleriano y ciclo/camino hamiltoniano.
 3. **Caminos mínimos**: Dijkstra, Bellman-Ford y Floyd-Warshall.
 4. **Árboles de expansión**: Kruskal y Prim.
@@ -60,7 +71,7 @@ La interfaz ahora tiene **dos selectores jerárquicos**: primero el **tipo de c�
 
 ### Formatos de entrada
 
-- **Redes**: matriz cuadrada de arcos ponderados. Vacío = sin arco. Un cero fuera de la diagonal representa un arco real de costo cero. Para red no dirigida, introduzca una matriz simétrica.
+- **Redes**: matriz cuadrada de arcos ponderados. Vacío = sin arco. En cálculos topológicos la casilla «0 = sin conexión» interpreta el cero como ausencia; en matrices de costos, 0 significa un arco de costo cero. Para red no dirigida, introduzca una matriz simétrica.
 - **Asignación**: matriz rectangular **agentes × tareas**, con todos los costos numéricos. Elija las dimensiones en el panel izquierdo.
 - **Wardrop**: matriz de **2 filas × número de rutas**. Fila 1: tiempos libres `a_i`; fila 2: pendientes `b_i`; introduzca la demanda total en su campo. Modelo `t_i(x_i)=a_i+b_i x_i`.
 - **Markov**: matriz cuadrada de probabilidades, todas entre 0 y 1 y con suma por fila igual a 1.
@@ -74,7 +85,7 @@ Después de pulsar **«Ejecutar cálculo»**, se habilita **«Generar informe ci
 
 El reporte incluye:
 
-- Título personalizado, nombre del cálculo y versión **3.0.0**.
+- Título personalizado, nombre del cálculo y versión **3.1.0**.
 - Categoría, algoritmo, instrucciones de entrada y parámetros utilizados.
 - Matriz usada para el cálculo, con etiquetas de filas/columnas.
 - Resultados reales calculados, sin sustituirlos por datos de ejemplo.

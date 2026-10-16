@@ -22,7 +22,7 @@ def test_categorized_ui_and_calculations(monkeypatch):
     w = MainWindow()
     try:
         assert len(GROUPS) >= 7
-        assert len(TASKS) == 18
+        assert len(TASKS) == 19
         assert not w.report_button.isEnabled()
         set_algorithm(w, "Caminos mínimos", "Dijkstra")
         assert w.source.isVisible() is False or not w.isVisible()  # window not shown
@@ -40,6 +40,24 @@ def test_categorized_ui_and_calculations(monkeypatch):
         w.calculate()
         assert w._result["costo"] == 5.0
 
+        set_algorithm(w, "Estructura y matrices", "Conteo de caminos de longitud k")
+        assert w.path_length.value() == 2
+        assert w.zero_absent.isChecked()
+        w.set_matrix([[0,1,1,0],[1,0,1,0],[1,1,0,1],[0,0,1,0]])
+        w.directed.setChecked(False)
+        w.source.setText("1")
+        w.target.setText("4")
+        w.calculate()
+        assert w._result["total"] == 1
+        assert "Longitud" in w.output.toPlainText() or "longitud" in w.output.toPlainText()
+        w.counting_kind.setCurrentIndex(1)
+        w.path_length.setValue(3)
+        w.calculate()
+        assert w._result["total"] == 1
+        set_algorithm(w, "Caminos mínimos", "Dijkstra")
+        w.directed.setChecked(True)
+        w.set_matrix([[0,4,2,float('nan')],[float('nan'),0,1,5],
+                      [float('nan'),float('nan'),0,3],[float('nan'),float('nan'),float('nan'),0]])
         set_algorithm(w, "Recorridos de grafos", "Análisis euleriano")
         w.calculate()
         assert w._result["euleriano"] is False

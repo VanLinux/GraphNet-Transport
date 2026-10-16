@@ -1,4 +1,4 @@
-"""GraphNet Transport 3.0 — scientific GUI with visual results and reports."""
+"""GraphNet Transport 3.1 — scientific GUI with concise analyses and reports."""
 from __future__ import annotations
 
 import csv
@@ -16,7 +16,7 @@ from PySide6.QtWidgets import (
     QMessageBox, QHeaderView, QInputDialog,
 )
 
-from . import __version__, __author__, core, reports, traversals, presentation
+from . import __version__, __author__, core, reports, traversals, presentation, counting
 
 # Algorithm identifiers remain stable regardless of translations or grouping.
 # Every entry has a short, algorithm-specific input instruction.
@@ -26,6 +26,7 @@ GROUPS = {
         "data": "Matriz cuadrada: celdas vacías = sin conexión; valores numéricos = pesos. Indique si la red es dirigida.",
         "algorithms": [
             ("Grados, conectividad y centralidad", "metrics", "Obtenga grados, componentes, densidad, centralidad, puentes y articulaciones."),
+            ("Conteo de caminos de longitud k", "counting", "Elija origen, destino y longitud exacta k. Recorridos: A^k (admiten repeticiones); caminos simples: sin repetir nodos (hasta 16 vértices)."),
             ("Matrices de adyacencia y Laplaciana", "matrices", "Genere las matrices de adyacencia, grados, Laplaciana y alcanzabilidad."),
             ("Conectividad algebraica", "algebraic", "Requiere red NO dirigida. Calcula el segundo valor propio de la Laplaciana."),
         ],
@@ -201,12 +202,26 @@ class MainWindow(QMainWindow):
         self.directed = QCheckBox("Red dirigida")
         self.directed.setChecked(True)
         form.addRow(self.directed)
+        self.zero_absent = QCheckBox("0 = sin conexión (adyacencia)")
+        self.zero_absent.setChecked(True)
+        self.zero_absent.setToolTip("Marque para matrices de adyacencia: 0=ausencia, 1=conexión. Desmarque para admitir arcos de costo cero.")
+        form.addRow(self.zero_absent)
         self.source = QLineEdit("1")
         self.target = QLineEdit("4")
         self.source_label = QLabel("Origen")
         self.target_label = QLabel("Destino")
         form.addRow(self.source_label, self.source)
         form.addRow(self.target_label, self.target)
+        self.path_length = QSpinBox()
+        self.path_length.setRange(0, 100)
+        self.path_length.setValue(2)
+        self.path_length_label = QLabel("Longitud k (aristas)")
+        form.addRow(self.path_length_label, self.path_length)
+        self.counting_kind = QComboBox()
+        self.counting_kind.addItem("Recorridos: pueden repetir nodos (A^k)", "walks")
+        self.counting_kind.addItem("Caminos simples: sin repetir nodos", "simple")
+        self.counting_kind_label = QLabel("Tipo de camino")
+        form.addRow(self.counting_kind_label, self.counting_kind)
         self.steps = QSpinBox()
         self.steps.setRange(0, 1_000_000)
         self.steps.setValue(10)
@@ -285,9 +300,12 @@ class MainWindow(QMainWindow):
         self.category.currentTextChanged.connect(self._on_category_changed)
         self.task.currentIndexChanged.connect(self._update_task)
         self.directed.toggled.connect(self._on_edit)
+        self.zero_absent.toggled.connect(self._on_edit)
         for widget in (self.source, self.target, self.demand, self.penalty):
             widget.textChanged.connect(self._on_parameters_edit)
         self.steps.valueChanged.connect(self._on_parameters_edit)
+        self.path_length.valueChanged.connect(self._on_parameters_edit)
+        self.counting_kind.currentIndexChanged.connect(self._on_parameters_edit)
         self._on_category_changed()
 
     def _invalidate_result(self):
@@ -417,12 +435,14 @@ class MainWindow(QMainWindow):
             "assignment": "Matriz de costos: filas = agentes, columnas = tareas. Ctrl+V para pegar.",
             "wardrop": "Matriz de rutas paralelas: fila 1 = aᵢ; fila 2 = bᵢ. Ctrl+V para pegar.",
         }[mode])
-        show_source = action in ("dijkstra", "bellman-ford", "flow", "intermodal_route", "markov", "tsp")
-        show_target = action in ("dijkstra", "bellman-ford", "flow", "intermodal_route")
+        show_source = action in ("dijkstra", "bellman-ford", "flow", "intermodal_route", "markov", "tsp", "counting")
+        show_target = action in ("dijkstra", "bellman-ford", "flow", "intermodal_route", "counting")
         for label, widget, visible in [
             (self.source_label, self.source, show_source),
             (self.target_label, self.target, show_target),
             (self.steps_label, self.steps, action == "markov"),
+            (self.path_length_label, self.path_length, action == "counting"),
+            (self.counting_kind_label, self.counting_kind, action == "counting"),
             (self.demand_label, self.demand, action == "wardrop"),
             (self.penalty_label, self.penalty, action == "intermodal_route"),
         ]:
@@ -430,6 +450,10 @@ class MainWindow(QMainWindow):
             widget.setVisible(visible)
         self.source_label.setText("Estado inicial" if action == "markov" else "Origen")
         self.directed.setVisible(mode == "graph")
+        self.zero_absent.setVisible(action in ("metrics", "matrices", "algebraic", "counting", "euler", "hamilton"))
+        if action in ("metrics", "counting"):
+            self.data_help.setText(self.data_help.text() +
+                "\n\nMatriz de adyacencia: 0 = sin conexión, 1 = conexión. Si los ceros son arcos reales, desmarque la casilla correspondiente.")
         self.row_label.setText("Rutas / filas" if mode == "assignment" else "Filas" if mode == "wardrop" else "Estados" if mode == "markov" else "Nodos")
         self.col_label.setVisible(mode in ("assignment", "wardrop"))
         self.columns.setVisible(mode in ("assignment", "wardrop"))
@@ -468,9 +492,15 @@ class MainWindow(QMainWindow):
         return values
 
     def current_graph(self):
+        action = self.task.currentData()
+        adjacency_mode = action in ("metrics", "matrices", "algebraic", "counting", "euler", "hamilton")
+        zero_absent = adjacency_mode and self.zero_absent.isChecked()
+        # Preserve attributes in an unedited GraphML. Its arcs are explicit and
+        # a weight of zero is a legitimate edge, unlike a binary adjacency cell.
         if not self._dirty and self._graph is not None:
             return self._graph
-        return core.matrix_to_graph(self.read_matrix(), self.directed.isChecked(), self._graph_labels)
+        return core.matrix_to_graph(self.read_matrix(), self.directed.isChecked(),
+                                    self._graph_labels, zero_is_absent=zero_absent)
 
     def resize_matrix(self):
         old = self.read_matrix()
@@ -572,18 +602,24 @@ class MainWindow(QMainWindow):
 
     def _parameters(self, action):
         params = {}
-        if action in ("dijkstra", "bellman-ford", "flow", "intermodal_route", "tsp", "markov"):
+        if action in ("dijkstra", "bellman-ford", "flow", "intermodal_route", "tsp", "markov", "counting"):
             params["Origen / estado inicial"] = self.source.text().strip()
-        if action in ("dijkstra", "bellman-ford", "flow", "intermodal_route"):
+        if action in ("dijkstra", "bellman-ford", "flow", "intermodal_route", "counting"):
             params["Destino"] = self.target.text().strip()
         if action == "markov":
             params["Pasos"] = self.steps.value()
+        if action == "counting":
+            params["Longitud k"] = self.path_length.value()
+            params["Tipo de recorrido"] = self.counting_kind.currentText()
         if action == "wardrop":
             params["Demanda"] = self.demand.text().strip()
         if action == "intermodal_route":
             params["Penalización de transbordo"] = self.penalty.text().strip()
         if self._mode == "graph":
             params["Red dirigida"] = "Sí" if self.directed.isChecked() else "No"
+            if action in ("metrics", "matrices", "algebraic", "counting", "euler", "hamilton"):
+                params["Ceros fuera de diagonal"] = ("Sin conexión" if self.zero_absent.isChecked()
+                                                        else "Arcos válidos de peso cero")
         return params
 
     def calculate(self):
@@ -606,6 +642,8 @@ class MainWindow(QMainWindow):
                 G = self.current_graph()
                 src, tgt = self.source.text().strip(), self.target.text().strip()
                 if action == "metrics": result = core.network_metrics(G)
+                elif action == "counting": result = counting.count_routes(
+                    G, src, tgt, self.path_length.value(), self.counting_kind.currentData())
                 elif action == "matrices": result = core.graph_matrices(G)
                 elif action == "algebraic": result = {"lambda_2": core.algebraic_connectivity(G)}
                 elif action in ("dijkstra", "bellman-ford"): result = core.shortest_path(G, src, tgt, action)
@@ -619,12 +657,17 @@ class MainWindow(QMainWindow):
                 elif action == "intermodal_route": result = core.intermodal_shortest_path(G, src, tgt, float(self.penalty.text()))
                 else: raise ValueError("Operación no implementada.")
             self._result = as_text(result)
+            report_matrix = matrix.copy()
+            if self._mode == "graph" and action in ("metrics", "matrices", "algebraic", "counting", "euler", "hamilton"):
+                # Make the report's diagram use the same edge set as the engine.
+                report_matrix, _ = core.graph_to_matrix(G)
             self._report_snapshot = {
                 "category": self.category.currentText(),
                 "algorithm": self.task.currentText(),
                 "description": ALGORITHM_HELP[action],
                 "input_help": GROUPS[self.category.currentText()]["data"],
                 "matrix": matrix.copy(),
+                "graph_matrix": report_matrix if self._mode == "graph" else None,
                 "row_labels": [self.table.verticalHeaderItem(i).text() for i in range(self.table.rowCount())],
                 "column_labels": [self.table.horizontalHeaderItem(i).text() for i in range(self.table.columnCount())],
                 "parameters": self._parameters(action),

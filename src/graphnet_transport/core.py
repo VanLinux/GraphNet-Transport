@@ -24,9 +24,27 @@ def check_matrix(matrix):
     return a
 
 
-def matrix_to_graph(matrix, directed=True, labels=None):
+def matrix_to_graph(matrix, directed=True, labels=None, *, zero_is_absent=False):
+    """Convert an adjacency/cost matrix into a graph.
+
+    When zero_is_absent=True, off-diagonal zero encodes a missing connection
+    (binary adjacency). For cost matrices it stays False so zero-cost arcs exist.
+    """
     a = check_matrix(matrix)
     n = len(a)
+    if zero_is_absent:
+        a = a.copy()
+        for i in range(n):
+            for j in range(n):
+                if i != j and np.isfinite(a[i,j]) and a[i,j] == 0:
+                    a[i,j] = np.nan
+    if not directed:
+        for i in range(n):
+            for j in range(i+1,n):
+                forward, reverse = a[i,j], a[j,i]
+                if (np.isnan(forward) != np.isnan(reverse) or
+                    (np.isfinite(forward) and np.isfinite(reverse) and not np.isclose(forward,reverse))):
+                    raise ValueError("Una red no dirigida requiere una matriz simétrica: refleje cada conexión a ambos lados de la diagonal.")
     labels = [str(x) for x in (labels if labels is not None else range(1, n + 1))]
     if len(labels) != n or len(set(labels)) != n:
         raise ValueError("Las etiquetas de nodos deben ser únicas y corresponder a la matriz.")
@@ -116,6 +134,18 @@ def network_metrics(G):
         "puntos_articulacion": list(nx.articulation_points(H)),
         "puentes": list(nx.bridges(H)),
     }
+    # For simple graphs without loops: directed n(n-1), undirected n(n-1)/2.
+    n = G.number_of_nodes()
+    max_edges = n*(n-1) if G.is_directed() else n*(n-1)//2
+    has_loops = nx.number_of_selfloops(G) > 0
+    result["aristas_maximas"] = max_edges
+    result["densidad_porcentaje"] = 100.0 * result["densidad"]
+    result["conexa"] = (result["componentes_fuertes"] == 1 if G.is_directed()
+                        else result["componentes_debiles"] == 1)
+    result["nota_densidad"] = ("La densidad clásica supone un grafo simple sin lazos. "
+                               "Los lazos o arcos paralelos modifican su interpretación."
+                               if has_loops or G.is_multigraph() else
+                               "La densidad mide la proporción de conexiones existentes respecto al máximo teórico; no mide capacidad vial.")
     return result
 
 

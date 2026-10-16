@@ -17,7 +17,7 @@ def test_letter_paper_and_math_and_color_route():
     assert r'draw=routegreen' in text
     assert r'\begin{equation}' in text and r'\min_' in text
     assert 'Héctor Alonso Benítez García' in text
-    assert 'Versión 3.0.0' in text
+    assert 'Versión 3.1.0' in text
 
 
 def test_large_graph_has_honest_omission():

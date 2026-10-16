@@ -138,8 +138,129 @@ def _result_block(value, level=0) -> str:
     return r"\noindent " + escape_latex(value) + r"\par"
 
 
+
+def _compact_table(headers, rows):
+    """A compact booktabs layout for report results (never one subsection per value)."""
+    headers = list(headers)
+    rows = list(rows)
+    layout = 'l' + 'r' * (len(headers)-1)
+    result = [r'\begin{center}', r'\small', r'\begin{adjustbox}{max width=\linewidth}',
+              r'\begin{tabular}{' + layout + '}', r'\toprule',
+              ' & '.join(escape_latex(v) for v in headers) + r' \\', r'\midrule']
+    for row in rows:
+        result.append(' & '.join(escape_latex(_format_scalar(v)) for v in row) + r' \\')
+    result += [r'\bottomrule', r'\end{tabular}', r'\end{adjustbox}', r'\end{center}']
+    return '\n'.join(result)
+
+
+def _format_scalar(value):
+    if isinstance(value, bool):
+        return 'Sí' if value else 'No'
+    if value is None:
+        return 'No determinado'
+    if isinstance(value, (float, np.floating)):
+        return f'{value:.6g}' if math.isfinite(value) else 'No definido'
+    return str(value)
+
+
+def _metrics_report(result, params):
+    directed = bool(result['dirigido'])
+    n, m = result['nodos'], result['arcos']
+    maximum = result.get('aristas_maximas', n*(n-1) if directed else n*(n-1)//2)
+    formula = r'\frac{m}{n(n-1)}' if directed else r'\frac{2m}{n(n-1)}'
+    actual = (fr'\frac{{{m}}}{{{n}({n}-1)}}' if directed else
+              fr'\frac{{2\cdot{m}}}{{{n}({n}-1)}}')
+    score = result['densidad']
+    connected = result.get('conexa', result['componentes_fuertes'] == 1 if directed else result['componentes_debiles'] == 1)
+    status = ('fuertemente conexa' if directed else 'conexa') if connected else ('no fuertemente conexa' if directed else 'no conexa')
+    rows = ([('Nodos (n)', n), ('Arcos (m)', m), ('Arcos posibles', maximum),
+             ('Componentes fuertes', result['componentes_fuertes']),
+             ('Componentes débiles', result['componentes_debiles']),
+             ('Densidad', f'{100*score:.2f}%')]
+            if directed else
+            [('Nodos (n)', n), ('Aristas (m)', m), ('Aristas posibles', maximum),
+             ('Componentes conexas', result['componentes_debiles']),
+             ('Densidad', f'{100*score:.2f}%')])
+    lines = [r'\subsection{Resumen de la red}', _compact_table(['Indicador', 'Resultado'], rows),
+             r'\subsection{Cálculo de la densidad}']
+    if n < 2:
+        lines.append('La densidad se informa como cero por convención para menos de dos vértices; '
+                     'la fórmula usual tiene denominador nulo.')
+    else:
+        lines += ['Para una red '+('dirigida' if directed else 'no dirigida') +
+                  ' simple y sin lazos se emplea la relación entre conexiones existentes y posibles.',
+                  r'\begin{equation}',
+                  r'D = ' + formula + r' = ' + actual + fr' \approx {score:.4f} = {100*score:.2f}\%',
+                  r'\end{equation}']
+    lines.append(r'\subsection{Indicadores por vértice}')
+    degree = result['grado']
+    nodes = list(degree)
+    if directed:
+        lines.append(_compact_table(['Nodo','Entrada', 'Salida', 'Total'],
+                    [(node, result['grado_entrada'][node], result['grado_salida'][node], degree[node]) for node in nodes]))
+    else:
+        lines.append(_compact_table(['Nodo', 'Grado', 'Centralidad de grado'],
+                    [(node, degree[node], result['centralidad_grado'][node]) for node in nodes]))
+    lines += [r'\subsection{Interpretación de ingeniería}',
+              f'La red es {status}. La densidad expresa la proporción de conexiones topológicas existentes; '
+              'no representa capacidad de circulación, demanda, confiabilidad ni tiempo de viaje.']
+    note = result.get('nota_densidad', '')
+    if 'lazos' in note or 'paralelos' in note:
+        lines.append(escape_latex(note))
+    if nodes:
+        winner = max(nodes, key=lambda x:degree[x])
+        lines.append('El vértice con mayor grado es '+escape_latex(winner)+
+                     ' ('+escape_latex(degree[winner])+' conexiones contadas según la convención del grafo).')
+    return '\n'.join(lines)
+
+
+def _count_report(result):
+    simple = str(result['tipo']).startswith('Caminos simples')
+    lines = [r'\subsection{Conteo de longitud exacta}',
+             _compact_table(['Parámetro','Valor'], [('Origen', result['origen']),
+                 ('Destino', result['destino']), ('Longitud (aristas)',result['longitud']),
+                 ('Tipo', result['tipo']), ('Cantidad exacta',result['total'])]),
+             r'\subsection{Interpretación}', escape_latex(result['interpretacion'])]
+    if result.get('ruta_ejemplo'):
+        lines += [r'\subsection{Un camino de ejemplo}',
+                 r'\begin{center}\colorbox{graphlight}{\parbox{0.91\linewidth}{\centering ' +
+                 r' $\rightarrow$ '.join(escape_latex(x) for x in result['ruta_ejemplo'])+
+                 r'}}\end{center}',
+                 'La trayectoria mostrada es solamente un ejemplo, no la enumeración completa.']
+    if simple:
+        lines.append('En caminos simples no se permite visitar un vértice más de una vez, '
+                     'por lo que la potencia de la matriz de adyacencia no proporciona directamente este conteo.')
+    else:
+        lines.append('La potencia de la matriz de adyacencia permite obtener la cantidad de recorridos '
+                     'entre el vértice de origen y el de destino con exactamente k aristas.')
+    return '\n'.join(lines)
+
+
+def _compact_generic(value):
+    if not isinstance(value, dict):
+        return _result_block(value)
+    simple = [(key, v) for key, v in value.items() if not isinstance(v,(dict,list,tuple))]
+    parts = [_compact_table(['Indicador','Resultado'], [(str(k).replace('_',' ').capitalize(),v) for k,v in simple])] if simple else []
+    for key, v in value.items():
+        if isinstance(v, dict) and all(not isinstance(x,(dict,list,tuple)) for x in v.values()):
+            parts += [r'\subsection{'+escape_latex(str(key).replace('_',' '))+'}',
+                      _compact_table(['Elemento','Valor'],v.items())]
+        elif isinstance(v, (list,tuple)):
+            parts.append(r'\subsection{'+escape_latex(str(key).replace('_',' '))+'}')
+            if v and all(not isinstance(x,(dict,list,tuple)) for x in v):
+                parts.append(_compact_table(['N.º','Valor'], [(i+1,x) for i,x in enumerate(v[:60])]))
+            else:
+                parts.append(_result_block(v))
+        elif isinstance(v, dict):
+            parts += [r'\subsection{'+escape_latex(str(key).replace('_',' '))+'}', _result_block(v)]
+    return '\n'.join(parts)
+
 # Notes include explicit assumptions so interpretation is not silently generalized.
 _MATH = {
+    "metrics": ("Grados y densidad de la red", r"D=\frac{m}{m_{\max}},\qquad k_i=\sum_j A_{ij} \quad \text{(red no dirigida)}.",
+                "Para redes dirigidas se distinguen grados de entrada y salida. La conectividad topológica no mide capacidad de transporte."),
+    "counting": ("Recorridos de longitud exacta", r"W_{ij}^{(k)}=(A^k)_{ij},\qquad W_{ij}^{(k+1)}=\sum_r W_{ir}^{(k)}A_{rj}.",
+                 "La potencia de adyacencia cuenta recorridos, que pueden repetir nodos o aristas. Los caminos simples se cuentan separadamente."),
     "dijkstra": ("Ruta de costo mínimo", r"d(v)=\min_{(u,v)\in E}\left\{d(u)+c_{uv}\right\}.",
                  "Dijkstra utiliza costos no negativos. La ruta reportada minimiza la suma de pesos."),
     "bellman-ford": ("Relajación de arcos", r"d^{(k)}(v)=\min\left(d^{(k-1)}(v),\min_{(u,v)\in E}\{d^{(k-1)}(u)+c_{uv}\}\right).",
@@ -176,6 +297,7 @@ _MATH = {
 def _math_section(algorithm, description):
     key = algorithm.lower()
     lookup = {
+        "grado": "metrics", "conteo de caminos": "counting",
         "dijkstra": "dijkstra", "bellman": "bellman-ford", "floyd": "floyd",
         "euler": "euler", "hamilton": "hamilton", "kruskal": "kruskal", "prim": "prim",
         "flujo máximo": "flow", "wardrop": "wardrop", "valores propios": "markov",
@@ -193,7 +315,7 @@ def _math_section(algorithm, description):
 
 def _edges_in_route(results):
     result = results if isinstance(results, dict) else {}
-    route = result.get("ruta") or result.get("recorrido") or []
+    route = result.get("ruta") or result.get("recorrido") or result.get("ruta_ejemplo") or []
     return [(str(u), str(v)) for u, v in zip(route, route[1:])] if isinstance(route, (tuple, list)) else []
 
 
@@ -251,7 +373,7 @@ def _diagram(matrix, *, labels=None, directed=True, route_edges=(), title="Red d
 
 
 def build_latex_report(*, name, category, algorithm, description, input_help, matrix, results,
-                       parameters=None, row_labels=None, column_labels=None, generated_at=None):
+                       parameters=None, row_labels=None, column_labels=None, generated_at=None, graph_matrix=None):
     if not str(name).strip():
         raise ValueError("El reporte necesita un nombre.")
     when = generated_at or datetime.now()
@@ -269,15 +391,15 @@ def build_latex_report(*, name, category, algorithm, description, input_help, ma
         r"\definecolor{inkgray}{HTML}{475569}",
         r"\pagestyle{fancy}", r"\fancyhf{}", r"\fancyhead[L]{\small\color{graphblue}\bfseries GraphNet Transport}",
         r"\fancyhead[R]{\small\color{inkgray} Informe científico}",
-        r"\fancyfoot[L]{\scriptsize GPL-3.0-only}", r"\fancyfoot[R]{\thepage}",
-        r"\setlength{\parskip}{0.5em}", r"\setlength{\parindent}{0pt}",
+        r"\fancyfoot[L]{\scriptsize Desarrollador: " + escape_latex(__author__) + r" \textbullet\ GPL-3.0-only}", r"\fancyfoot[R]{\thepage}",
+        r"\setlength{\parskip}{0.25em}", r"\setlength{\parindent}{0pt}",
         r"\begin{document}",
-        r"\begin{center}", r"{\color{graphblue}\rule{\linewidth}{1.7pt}}\\[1em]",
-        r"{\Huge\color{graphblue}\bfseries GraphNet Transport}\\[.7em]",
-        r"{\large Informe técnico de análisis de redes}\\[1.1em]",
-        r"{\LARGE\bfseries " + escape_latex(name.strip()) + r"}\\[.7em]",
-        r"{\large Versión " + escape_latex(__version__) + r"}\\[.6em]",
-        escape_latex(when.strftime("%Y-%m-%d %H:%M")) + r"\\[.6em]",
+        r"\begin{center}", r"{\color{graphblue}\rule{\linewidth}{1.7pt}}\\[.35em]",
+        r"{\LARGE\color{graphblue}\bfseries GraphNet Transport}\\[.3em]",
+        r"{\normalsize Informe técnico de análisis de redes}\\[.35em]",
+        r"{\Large\bfseries " + escape_latex(name.strip()) + r"}\\[.3em]",
+        r"{\small Versión " + escape_latex(__version__) + r"}\\[.2em]",
+        escape_latex(when.strftime("%Y-%m-%d %H:%M")) + r"\\[.2em]",
         r"{\color{graphblue}\rule{\linewidth}{1.7pt}}",
         r"\end{center}",
         r"\section{Objeto del análisis}",
@@ -289,29 +411,37 @@ def build_latex_report(*, name, category, algorithm, description, input_help, ma
         r"\section{Datos y configuración}",
     ]
     if params:
-        doc.extend([r"\begin{description}"] +
-                   [r"\item["+escape_latex(k)+"] "+escape_latex(v) for k, v in params.items()] +
-                   [r"\end{description}"])
+        doc.append(_compact_table(["Parámetro", "Valor"], params.items()))
     else:
         doc.append("No se utilizaron parámetros adicionales.")
     doc += [r"\subsection{Matriz de entrada}", _matrix_table(matrix, row_labels, column_labels)]
     # For Markov matrices and rectangular formulations a graph diagram may be misleading.
     if category not in ("Cadenas de Markov", "Equilibrio de transporte", "Optimización combinatoria"):
-        diagram = _diagram(matrix, labels=row_labels, directed=directed, route_edges=route_edges,
+        diagram = _diagram(graph_matrix if graph_matrix is not None else matrix,
+                           labels=row_labels, directed=directed, route_edges=route_edges,
                            title="Red analizada y solución resaltada" if route_edges else "Grafo de entrada")
         if diagram:
             doc.extend([r"\subsection{Representación de la red}", diagram])
-    if route_edges:
+    if route_edges and not (isinstance(results, dict) and 'ruta_ejemplo' in results):
         doc.extend([r"\section{Recorrido identificado}",
                     r"\begin{center}\colorbox{graphlight}{\parbox{0.91\linewidth}{\centering\large\bfseries " +
                     r"\ $\rightarrow$\ ".join(escape_latex(x) for x in (results.get("ruta") or results.get("recorrido"))) +
                     r"}}\end{center}"])
-    doc += [r"\section{Resultados numéricos}", _result_block(results),
-            r"\section{Interpretación y alcance}",
-            "Los resultados corresponden a los datos suministrados y a las hipótesis especificadas. "
-            "La validez de una conclusión depende de la representación de la red, sus parámetros y las condiciones del algoritmo.",
-            r"\par\smallskip\hrule\smallskip",
-            r"\footnotesize\textbf{Desarrollador:} " + escape_latex(__author__) + r".\\",
-            r"GraphNet Transport " + escape_latex(__version__) + r". Software libre, GNU GPL v3.0.",
-            r"\end{document}"]
+    if isinstance(results, dict) and 'densidad' in results and 'grado' in results:
+        computed = _metrics_report(results, params)
+    elif isinstance(results, dict) and 'longitud' in results and 'total' in results:
+        computed = _count_report(results)
+    else:
+        computed = _compact_generic(results)
+    scope = ("Este informe documenta un conteo exacto para el origen, destino y longitud indicados."
+             if isinstance(results, dict) and 'longitud' in results and 'total' in results else
+             "Los indicadores de conectividad representan la estructura topológica de la matriz y no expresan capacidad vial."
+             if isinstance(results, dict) and 'densidad' in results and 'grado' in results else
+             "Los resultados corresponden a los datos suministrados y las hipótesis del algoritmo.")
+    special_result = isinstance(results, dict) and (('densidad' in results and 'grado' in results)
+                   or ('longitud' in results and 'total' in results))
+    doc += [r"\section{Resultados numéricos}", computed]
+    if not special_result:
+        doc += [r"\section{Interpretación y alcance}", scope]
+    doc += [r"\end{document}"]
     return "\n".join(doc) + "\n"

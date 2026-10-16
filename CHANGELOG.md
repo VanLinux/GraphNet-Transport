@@ -1,5 +1,15 @@
 # Registro de cambios
 
+## 3.1.0 — 2026-10-16
+
+- Corregida la interpretación de ceros en matrices de adyacencia: un 0 indica ausencia de conexión, con modo seleccionable para preservar arcos de peso cero.
+- Validación de simetría para matrices de redes no dirigidas.
+- Rediseño de las salidas de grados, densidad y conectividad: resúmenes y tablas en vez de listados extensos.
+- Conteo exacto de recorridos mediante potencias de la matriz de adyacencia y de caminos simples mediante programación dinámica (hasta 16 nodos).
+- Parámetros específicos de longitud y clase de recorrido, con ejemplo de ruta cuando existe.
+- Informes .tex compactos en papel carta, con tablas, sustitución numérica de densidad, modelo matemático, interpretación, diagrama coherente con las aristas calculadas y créditos en pie de página.
+- Añadido caso de referencia de cuatro estaciones y pruebas de coherencia para grafos dirigidos/no dirigidos y convenios de ceros.
+
 ## 3.0.0 — 2026-10-16
 
 - Añadidos los análisis euleriano (circuitos/caminos) y hamiltoniano (ciclos/caminos) sobre redes dirigidas y no dirigidas.
