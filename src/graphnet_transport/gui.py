@@ -1,4 +1,4 @@
-"""GraphNet Transport 2.0 desktop interface, organized by scientific area."""
+"""GraphNet Transport 3.0 — scientific GUI with visual results and reports."""
 from __future__ import annotations
 
 import csv
@@ -12,11 +12,11 @@ from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QFormLayout,
     QTableWidget, QTableWidgetItem, QSplitter, QGroupBox, QLabel, QLineEdit,
-    QSpinBox, QCheckBox, QPushButton, QComboBox, QPlainTextEdit, QFileDialog,
+    QSpinBox, QCheckBox, QPushButton, QComboBox, QTextBrowser, QFileDialog,
     QMessageBox, QHeaderView, QInputDialog,
 )
 
-from . import __version__, __author__, core, reports
+from . import __version__, __author__, core, reports, traversals, presentation
 
 # Algorithm identifiers remain stable regardless of translations or grouping.
 # Every entry has a short, algorithm-specific input instruction.
@@ -28,6 +28,14 @@ GROUPS = {
             ("Grados, conectividad y centralidad", "metrics", "Obtenga grados, componentes, densidad, centralidad, puentes y articulaciones."),
             ("Matrices de adyacencia y Laplaciana", "matrices", "Genere las matrices de adyacencia, grados, Laplaciana y alcanzabilidad."),
             ("Conectividad algebraica", "algebraic", "Requiere red NO dirigida. Calcula el segundo valor propio de la Laplaciana."),
+        ],
+    },
+    "Recorridos de grafos": {
+        "intro": "Comprueba recorridos que atraviesan cada arista o visitan cada nodo.",
+        "data": "Matriz cuadrada de adyacencia: los valores numéricos indican aristas; celdas vacías = arista ausente. Seleccione red dirigida o no dirigida. El costo no afecta estas propiedades.",
+        "algorithms": [
+            ("Análisis euleriano", "euler", "Determina si existe circuito que utilice cada arista una vez, o solo camino euleriano abierto; devuelve el recorrido cuando existe."),
+            ("Análisis hamiltoniano", "hamilton", "Busca un ciclo que visite cada nodo una vez; también identifica caminos abiertos. La decisión exacta se limita a 16 nodos, o devuelve «No determinado»."),
         ],
     },
     "Caminos mínimos": {
@@ -140,6 +148,19 @@ class MainWindow(QMainWindow):
         central = QWidget()
         self.setCentralWidget(central)
         root = QVBoxLayout(central)
+        root.setContentsMargins(14, 12, 14, 10)
+        root.setSpacing(12)
+        central.setStyleSheet("""
+            QWidget {font-family: 'Noto Sans', 'DejaVu Sans', sans-serif; font-size: 12px;}
+            QGroupBox {font-size:13px; font-weight: 650; color:#244b70; border:1px solid #d4e0ec;
+                       border-radius:8px; margin-top:13px; padding-top:13px; background:#f8fbff;}
+            QGroupBox::title {subcontrol-origin:margin; left:11px; padding:0 5px;}
+            QComboBox, QLineEdit, QSpinBox {padding:5px; border:1px solid #c2d3e2; border-radius:5px; background:white;}
+            QPushButton {background:#e9f2fa; border:1px solid #c3d8e9; border-radius:6px; padding:7px; color:#214c72;}
+            QPushButton:hover {background:#d8eafa;} QPushButton:disabled {color:#9aa7b4;}
+            QTableWidget {gridline-color:#dfebf5; alternate-background-color:#f4f9fe; selection-background-color:#b6dbee;}
+            QTextBrowser {background:white; border:1px solid #d8e4ee; border-radius:8px; padding:10px;}
+        """)
         header = QHBoxLayout()
         title = QLabel(f"GraphNet Transport  •  v{__version__}")
         title.setStyleSheet("font-size: 20px; font-weight: 700;")
@@ -247,15 +268,16 @@ class MainWindow(QMainWindow):
         export_json = QPushButton("Exportar JSON")
         export_json.clicked.connect(self.export_result)
         results_title.addWidget(export_json)
-        self.report_button = QPushButton("Descargar reporte LaTeX (.tex)")
+        self.report_button = QPushButton("Generar informe científico (.tex)")
         self.report_button.setToolTip("Solicita un nombre y guarda un .tex en Descargas, sin sobrescribir archivos.")
         self.report_button.setEnabled(False)
         self.report_button.clicked.connect(self.export_latex)
         results_title.addWidget(self.report_button)
         workspace_layout.addLayout(results_title)
-        self.output = QPlainTextEdit()
+        self.output = QTextBrowser()
         self.output.setReadOnly(True)
-        self.output.setPlaceholderText("Elija una categoría y un algoritmo. Introduzca los datos y ejecute el cálculo.")
+        self.output.setOpenExternalLinks(False)
+        self.output.setPlaceholderText("Seleccione un algoritmo, introduzca sus datos y ejecute el cálculo para ver un resumen visual.")
         workspace_layout.addWidget(self.output, 2)
         splitter.addWidget(workspace)
         splitter.setSizes([355, 845])
@@ -588,6 +610,8 @@ class MainWindow(QMainWindow):
                 elif action == "algebraic": result = {"lambda_2": core.algebraic_connectivity(G)}
                 elif action in ("dijkstra", "bellman-ford"): result = core.shortest_path(G, src, tgt, action)
                 elif action == "floyd": result = core.all_pairs(G)
+                elif action == "euler": result = traversals.euler_analysis(G)
+                elif action == "hamilton": result = traversals.hamilton_analysis(G)
                 elif action in ("kruskal", "prim"): result = core.spanning_tree(G, action)
                 elif action == "flow": result = core.maximum_flow(G, src, tgt)
                 elif action == "tsp": result = core.approximate_tsp(G, src if src in G else None)
@@ -607,7 +631,7 @@ class MainWindow(QMainWindow):
                 "results": self._result,
             }
             self.report_button.setEnabled(True)
-            self.output.setPlainText(json.dumps(self._result, indent=2, ensure_ascii=False, allow_nan=True))
+            self.output.setHtml(presentation.render_result(self.category.currentText(), self.task.currentText(), self._result))
             self.statusBar().showMessage(f"Cálculo completado: {self.task.currentText()}", 7000)
         self._action(run)
 

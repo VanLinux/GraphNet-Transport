@@ -22,28 +22,38 @@ def test_categorized_ui_and_calculations(monkeypatch):
     w = MainWindow()
     try:
         assert len(GROUPS) >= 7
-        assert len(TASKS) == 16
+        assert len(TASKS) == 18
         assert not w.report_button.isEnabled()
         set_algorithm(w, "Caminos mínimos", "Dijkstra")
         assert w.source.isVisible() is False or not w.isVisible()  # window not shown
         assert "costos" in w.data_help.text()
         w.calculate()
-        result = json.loads(w.output.toPlainText())
+        result = w._result
         assert result["costo"] == 5.0
         assert result["ruta"] == ["1", "3", "4"]
         assert w.report_button.isEnabled()
+        assert "Recorrido obtenido" in w.output.toPlainText()
+        assert "1" in w.output.toPlainText() and "3" in w.output.toPlainText()
         w.source.setText("2")
         assert not w.report_button.isEnabled()
         w.source.setText("1")
         w.calculate()
-        assert json.loads(w.output.toPlainText())["costo"] == 5.0
+        assert w._result["costo"] == 5.0
+
+        set_algorithm(w, "Recorridos de grafos", "Análisis euleriano")
+        w.calculate()
+        assert w._result["euleriano"] is False
+        assert "Euler" in w.output.toPlainText() or "euleriano" in w.output.toPlainText().lower()
+        set_algorithm(w, "Recorridos de grafos", "Análisis hamiltoniano")
+        w.calculate()
+        assert w._result["hamiltoniano"] is False
 
         set_algorithm(w, "Cadenas de Markov", "Valores propios, estacionariedad y evolución")
         assert w.table.rowCount() == 2
         assert w.table.columnCount() == 2
         assert "fila" in w.data_help.text()
         w.calculate()
-        result = json.loads(w.output.toPlainText())
+        result = w._result
         assert result["lambda_2"] == pytest.approx(0.7)
         assert result["converges_unique"] is True
 
@@ -57,18 +67,18 @@ def test_categorized_ui_and_calculations(monkeypatch):
         w.table.setItem(1, 3, w.table.item(1, 0).clone())
         w.table.setItem(2, 3, w.table.item(2, 0).clone())
         w.calculate()
-        assert json.loads(w.output.toPlainText())["costo"] == 5.0
+        assert w._result["costo"] == 5.0
 
         set_algorithm(w, "Equilibrio de transporte", "Equilibrio de Wardrop: rutas paralelas")
         assert w.table.rowCount() == 2
         w.calculate()
-        result = json.loads(w.output.toPlainText())
+        result = w._result
         assert sum(result["flujos"]) == pytest.approx(12)
         set_algorithm(w, "Caminos mínimos", "Dijkstra")
         assert w.table.rowCount() == 4
         assert w.table.columnCount() == 4
         w.calculate()
-        assert json.loads(w.output.toPlainText())["costo"] == 5.0
+        assert w._result["costo"] == 5.0
     finally:
         w.close()
 

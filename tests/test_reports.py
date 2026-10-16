@@ -26,7 +26,7 @@ def test_latex_includes_inputs_results_and_metadata(tmp_path):
     assert r"b\#2" in tex
     assert "costo" in tex and "\n2\n" not in tex
     assert "Héctor Alonso Benítez García" in tex
-    assert "Versión 2.0.0" in tex
+    assert "Versión 3.0.0" in tex
     path = write_report("Ensayo A_1%", tex, tmp_path)
     assert path.exists()
     second = write_report("Ensayo A_1%", tex, tmp_path)

@@ -1,5 +1,13 @@
 # Registro de cambios
 
+## 3.0.0 — 2026-10-16
+
+- Añadidos los análisis euleriano (circuitos/caminos) y hamiltoniano (ciclos/caminos) sobre redes dirigidas y no dirigidas.
+- Prueba hamiltoniana exacta para hasta 16 nodos y estado explícito «No determinado» para redes mayores.
+- Panel de resultados visual con indicadores, tablas y rutas destacadas en lugar de JSON sin formato.
+- Informes LaTeX en papel carta, con diseño científico, formulación matemática, gráficos TikZ y arcos de solución coloreados.
+- Ampliadas las pruebas de teoría de grafos, interfaz, representación HTML y generación LaTeX.
+
 ## 2.0.0 — 2026-10-16
 
 - Se reorganizaron 16 algoritmos y cálculos en ocho categorías temáticas.

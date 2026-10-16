@@ -9,7 +9,7 @@ def example():
     return np.array([[0,4,2,np.nan],[np.nan,0,1,5],[np.nan,np.nan,0,3],[np.nan,np.nan,np.nan,0]])
 
 
-def test_version(): assert __version__ == '2.0.0'
+def test_version(): assert __version__ == '3.0.0'
 
 def test_graph_and_path():
     G=c.matrix_to_graph(example())
